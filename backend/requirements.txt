@@ -1,0 +1,11 @@
+django==5.2.7
+djangorestframework==3.16.1
+django-cors-headers==4.6.0
+python-dotenv==1.0.1
+channels==4.3.1
+channels-redis==4.3.0
+redis==5.0.8
+psycopg2-binary==2.9.11
+msgpack==1.1.2
+asgiref==3.10.0
+
