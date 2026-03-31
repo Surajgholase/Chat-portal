@@ -16,9 +16,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # 🔐 SECURITY SETTINGS
-SECRET_KEY = 'django-insecure-2p9=rcs*w6%(qh-_3npd%scl=set@_6-d_ppcdg0=pm3@(+b6('
-DEBUG = True
-ALLOWED_HOSTS = ["*"]  # allows local and deployed access
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-2p9=rcs*w6%(qh-_3npd%scl=set@_6-d_ppcdg0=pm3@(+b6(")
+DEBUG = os.getenv("DEBUG", "True") == "True"
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 
 # 🧩 APPLICATION DEFINITION
@@ -41,8 +41,9 @@ INSTALLED_APPS = [
 
 # ⚙️ MIDDLEWARE
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Must be first
+    'corsheaders.middleware.CorsMiddleware',          # Must be first
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',      # Serve static files in prod
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -74,12 +75,20 @@ WSGI_APPLICATION = 'chat_portal.wsgi.application'
 
 
 # 🗄️ DATABASE
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Uses PostgreSQL on Render (DATABASE_URL env var), falls back to SQLite locally
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    import dj_database_url
+    DATABASES = {
+        "default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # 🔑 PASSWORD VALIDATION
@@ -106,8 +115,10 @@ USE_I18N = True
 USE_TZ = True
 
 
-# 🖼️ STATIC FILES
-STATIC_URL = 'static/'
+# 🖼️ STATIC FILES (Whitenoise serves them in production)
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 
 # 🧱 DEFAULT FIELD TYPE
@@ -115,18 +126,19 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # 🌍 CORS SETTINGS
-CORS_ALLOW_ALL_ORIGINS = True  # allow React frontend to connect
-
-# Optionally, for production safety:
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:5173",
-#     "http://127.0.0.1:5173",
-# ]
+# Reads a comma-separated list from env var, e.g.:
+#   CORS_ALLOWED_ORIGINS=https://my-app.vercel.app,http://localhost:5173
+CORS_ALLOWED_ORIGINS = os.getenv(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173"
+).split(",")
 
 
 # 🤖 GROQ CONFIG
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
 
-# Optional safety check
+# Safety check
 if not GROQ_API_KEY:
     print("⚠️  Warning: GROQ_API_KEY not set in .env file.")
