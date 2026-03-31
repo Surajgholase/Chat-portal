@@ -1,314 +1,368 @@
-import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Lock,
-  Circle,
-  Plus,
-  Mic,
-  Lightbulb,
-  Video,
-  BookOpen,
-  MoreHorizontal,
-  Send,
-  Bolt,
-} from "lucide-react";
-import { startConversation, sendMessage } from "../services/api";
+import { useState, useRef, useEffect } from 'react';
+import Sidebar from '../components/layout/Sidebar';
+import TopBar from '../components/layout/TopBar';
+import SuggestionCards from '../components/chat/SuggestionCards';
+import ChatInput from '../components/chat/ChatInput';
+import { Bot, Copy, ThumbsUp, ThumbsDown, RotateCcw, Zap, WifiOff, RefreshCw } from 'lucide-react';
+import { startConversation, sendMessage } from '../services/api';
 
-// --- MessageBubble Component ---
-// I've included this component here as it was missing from your code.
-const MessageBubble = ({ sender, content, timestamp }) => {
-  const isUser = sender === "user";
+/* ─── Service Banner ─────────────────────────────────── */
+function ServiceUnavailableBanner({ onRetry }) {
+  const [retrying, setRetrying] = useState(false);
+  const handleRetry = async () => {
+    setRetrying(true);
+    await new Promise(r => setTimeout(r, 1500));
+    setRetrying(false);
+    onRetry?.();
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
-    >
-      <div
-        className={`flex items-start gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}
-      >
-        {/* Avatar Placeholder */}
-        <div
-          className={`h-8 w-8 rounded-full grid place-items-center flex-shrink-0 ${isUser ? "bg-blue-600" : "bg-[#2a2a2a]"
-            }`}
-        >
-          {isUser ? (
-            <span className="text-sm font-medium text-white">U</span>
-          ) : (
-            <Bolt size={16} className="text-white/70" />
-          )}
-        </div>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '10px',
+      padding: '9px 12px', borderRadius: '9px', marginBottom: '10px',
+      background: '#1a1010',
+      border: '1px solid rgba(239,68,68,0.25)',
+    }}>
+      <div style={{
+        width: '28px', height: '28px', borderRadius: '7px',
+        background: 'rgba(239,68,68,0.1)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        position: 'relative',
+      }}>
+        <WifiOff style={{ width: '13px', height: '13px', color: '#ef4444' }} />
+        <span style={{
+          position: 'absolute', top: '-2px', right: '-2px',
+          width: '7px', height: '7px', borderRadius: '50%',
+          background: '#ef4444',
+          animation: 'pulseDot 1.8s ease-in-out infinite',
+        }} />
+      </div>
 
-        {/* Message Content */}
-        <div
-          className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-2xl ${isUser
-            ? "bg-blue-600 text-white rounded-br-lg"
-            : "bg-[#2a2a2a] text-white/90 rounded-bl-lg"
-            }`}
-        >
-          <p className="text-sm">{content}</p>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: '12.5px', fontWeight: 600, color: '#fca5a5', fontFamily: 'Inter, sans-serif', letterSpacing: '-0.01em' }}>
+          AI service not available right now
+        </p>
+        <p style={{ fontSize: '11px', color: '#7f3535', fontFamily: 'Inter, sans-serif', marginTop: '1px' }}>
+          Messages will be sent once reconnected.
+        </p>
+      </div>
+
+      <button
+        id="retry-service-btn"
+        onClick={handleRetry}
+        disabled={retrying}
+        style={{
+          flexShrink: 0, display: 'flex', alignItems: 'center', gap: '4px',
+          padding: '5px 9px', borderRadius: '6px',
+          border: '1px solid rgba(239,68,68,0.22)',
+          background: 'rgba(239,68,68,0.08)',
+          cursor: retrying ? 'not-allowed' : 'pointer',
+          color: '#fca5a5', fontSize: '11.5px', fontWeight: 500,
+          fontFamily: 'Inter, sans-serif', opacity: retrying ? 0.6 : 1,
+          transition: 'background 0.1s ease',
+        }}
+        onMouseEnter={e => { if (!retrying) e.currentTarget.style.background = 'rgba(239,68,68,0.14)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+      >
+        <RefreshCw style={{ width: '11px', height: '11px', animation: retrying ? 'spin 0.65s linear infinite' : 'none' }} />
+        {retrying ? 'Retrying…' : 'Retry'}
+      </button>
+    </div>
+  );
+}
+
+/* ─── Typing Indicator ────────────────────────────────── */
+function TypingIndicator() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }} className="animate-fade-up">
+      <div style={{
+        width: '28px', height: '28px', borderRadius: '7px',
+        background: '#6366f1',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <Bot style={{ width: '13px', height: '13px', color: '#fff' }} />
+      </div>
+      <div style={{
+        padding: '10px 14px', borderRadius: '4px 10px 10px 10px',
+        background: '#18181f', border: '1px solid #2a2a35',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} className="typing-dot" style={{
+              width: '5px', height: '5px', borderRadius: '50%',
+              background: '#6366f1', animationDelay: `${i * 0.18}s`,
+            }} />
+          ))}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
-};
+}
 
+/* ─── Message Bubble ──────────────────────────────────── */
+function MessageBubble({ message, isLatest }) {
+  const [copied, setCopied] = useState(false);
+  const [liked,  setLiked]  = useState(null);
 
-// --- Main Chat Component ---
-export default function App() {
-  const [conversation, setConversation] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false); // Added loading state
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const actionBtn = (id, onClick, title, Icon, active, activeColor) => (
+    <button
+      id={id}
+      onClick={onClick}
+      title={title}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '3px',
+        padding: '4px 6px', borderRadius: '5px', border: 'none',
+        background: 'transparent',
+        color: active ? activeColor : '#3f3f46',
+        cursor: 'pointer', fontSize: '11px',
+        fontFamily: 'Inter, sans-serif',
+        transition: 'background 0.1s ease, color 0.1s ease',
+      }}
+      onMouseEnter={e => { if (!active) { e.currentTarget.style.background = '#1e1e27'; e.currentTarget.style.color = '#71717a'; } }}
+      onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#3f3f46'; } }}
+    >
+      <Icon style={{ width: '12px', height: '12px' }} />
+      {id === 'copy-btn' && copied && <span>Copied</span>}
+    </button>
+  );
+
+  if (message.sender === 'user') {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }} className="animate-fade-up">
+        <div style={{
+          background: '#6366f1',
+          color: '#fff',
+          borderRadius: '16px 16px 4px 16px',
+          padding: '10px 14px',
+          maxWidth: '68%',
+          fontSize: '14px', lineHeight: '1.65',
+          fontFamily: 'Inter, sans-serif',
+          wordBreak: 'break-word', letterSpacing: '-0.01em',
+        }}>
+          {message.content}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }} className="animate-fade-up">
+      {/* Bot avatar */}
+      <div style={{
+        width: '28px', height: '28px', borderRadius: '7px',
+        background: '#6366f1',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, marginTop: '2px',
+      }}>
+        <Bot style={{ width: '13px', height: '13px', color: '#fff' }} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '76%' }}>
+        <div style={{
+          background: '#18181f',
+          border: '1px solid #2a2a35',
+          borderRadius: '4px 16px 16px 16px',
+          padding: '11px 14px',
+          fontSize: '14px', lineHeight: 1.75,
+          color: '#d4d4d8',
+          fontFamily: 'Inter, sans-serif',
+          wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+          letterSpacing: '-0.01em',
+        }}>
+          {message.content}
+        </div>
+
+        {isLatest && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1px', paddingLeft: '2px' }}>
+            {actionBtn('copy-btn',    handleCopy,                     copied ? 'Copied!' : 'Copy',       Copy,      copied,           '#22c55e')}
+            {actionBtn('like-btn',    () => setLiked(l => l==='up'   ? null : 'up'),   'Helpful',       ThumbsUp,  liked==='up',     '#22c55e')}
+            {actionBtn('dislike-btn', () => setLiked(l => l==='down' ? null : 'down'), 'Not helpful',   ThumbsDown, liked==='down',  '#ef4444')}
+            {actionBtn('retry-btn',   null,                           'Retry',           RotateCcw,  false,            '#71717a')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Welcome Screen ──────────────────────────────────── */
+function WelcomeScreen({ onSuggestionClick }) {
+  return (
+    <div style={{
+      height: '100%', overflowY: 'auto',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: '56px 24px 28px',
+    }}>
+      {/* Greeting */}
+      <div className="animate-fade-up" style={{ textAlign: 'center', marginBottom: '44px', maxWidth: '520px' }}>
+
+        {/* Icon */}
+        <div style={{
+          width: '56px', height: '56px', borderRadius: '14px',
+          background: '#6366f1',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 22px',
+        }}>
+          <Zap style={{ width: '24px', height: '24px', color: '#fff', fill: '#fff' }} />
+        </div>
+
+        <h1 style={{
+          fontSize: 'clamp(1.9rem, 4.5vw, 2.9rem)',
+          fontWeight: 800,
+          lineHeight: 1.1,
+          marginBottom: '10px',
+          fontFamily: 'Outfit, sans-serif',
+          letterSpacing: '-0.04em',
+          color: '#f4f4f5',
+        }}>
+          Hello, <span style={{ color: '#6366f1' }}>Marcus</span>
+        </h1>
+
+        <p style={{
+          fontSize: 'clamp(0.9rem, 2vw, 1.05rem)',
+          color: '#52525b',
+          fontFamily: 'Inter, sans-serif',
+          letterSpacing: '-0.01em',
+        }}>
+          What can I help you with today?
+        </p>
+      </div>
+
+      {/* Cards */}
+      <div
+        className="animate-fade-up"
+        style={{ width: '100%', maxWidth: '820px', animationDelay: '0.08s', opacity: 0 }}
+      >
+        <p style={{
+          fontSize: '10px', fontWeight: 700,
+          textTransform: 'uppercase', letterSpacing: '0.1em',
+          textAlign: 'center', color: '#3f3f46',
+          marginBottom: '12px', fontFamily: 'Inter, sans-serif',
+        }}>
+          Popular Topics
+        </p>
+        <SuggestionCards onSuggestionClick={onSuggestionClick} />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main ChatPage ───────────────────────────────────── */
+export default function ChatPage() {
+  const [sidebarOpen,     setSidebarOpen]     = useState(false);
+  const [messages,        setMessages]        = useState([]);
+  const [isTyping,        setIsTyping]        = useState(false);
+  const [conversationId,  setConversationId]  = useState(null);
+  const [serviceAvailable,setServiceAvailable]= useState(true);
   const messagesEndRef = useRef(null);
+  const hasMsgs = messages.length > 0;
 
-  // Auto-scroll on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
-
-    setIsLoading(true);
-    let conv = conversation;
-
-    // Add user message instantly
-    const userMessage = {
-      id: Date.now(),
-      sender: "user",
-      content: input,
-      timestamp: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-
-    // If first message → start new conversation
-    if (!conv) {
-      try {
-        const newConv = await startConversation({ title: input.substring(0, 30) });
-        setConversation(newConv);
-        conv = newConv;
-      } catch (error) {
-        console.error("Start conversation failed:", error);
-        setIsLoading(false);
-        // Optionally show error to user
-        setMessages((prev) => prev.slice(0, -1)); // Remove optimistic user message
-        return;
-      }
-    }
+  const handleSend = async text => {
+    if (!text.trim()) return;
+    setMessages(prev => [...prev, { id: Date.now(), sender: 'user', content: text }]);
+    setIsTyping(true);
 
     try {
-      // Send message to backend
-      const response = await sendMessage({
-        conversation_id: conv.id,
-        sender: "user",
-        content: userMessage.content,
-      });
+      let convId = conversationId;
+      if (!convId) {
+        try {
+          const conv = await startConversation({ title: text.slice(0, 50) });
+          convId = conv.id; setConversationId(convId);
+        } catch { convId = null; }
+      }
 
-      // Add AI reply
-      const aiMessage = {
-        id: Date.now() + 1,
-        sender: "ai",
-        content: response?.ai_message?.content || "Sorry, I had trouble connecting.",
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (error) {
-      console.error("Send message failed:", error);
-      // Add a local error message
-      const errorMessage = {
-        id: Date.now() + 1,
-        sender: "ai",
-        content: "I couldn't get a response. Please try again.",
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      let aiResponse;
+      try {
+        const res = await sendMessage({ conversation_id: convId, content: text, sender: 'user' });
+        aiResponse = res.response || res.ai_message?.content || res.message || "I received your message.";
+      } catch {
+        aiResponse = "I'm having trouble connecting to the server. Please check if the backend is running.";
+      }
+
+      setMessages(prev => [...prev, { id: Date.now() + 1, sender: 'ai', content: aiResponse }]);
+    } catch {
+      setMessages(prev => [...prev, { id: Date.now() + 1, sender: 'ai', content: 'Something went wrong. Please try again.' }]);
     } finally {
-      setIsLoading(false);
+      setIsTyping(false);
     }
   };
 
-  // New handler to set input from chips
-  const handleChipClick = (text) => {
-    setInput(text);
-  };
+  const handleNewChat = () => { setMessages([]); setConversationId(null); setSidebarOpen(false); };
 
   return (
-    <main className="relative min-h-screen bg-[#121212] text-white flex flex-col overflow-hidden p-4">
+    <div style={{ position: 'relative', display: 'flex', height: '100vh', overflow: 'hidden', background: '#111116' }}>
 
-      {/* Header - Redesigned to match screenshot */}
-      <header className="z-10 w-full max-w-3xl mx-auto py-2 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-[#2a2a2a] grid place-items-center ring-1 ring-white/10">
-            <Bolt size={18} className="text-white/70" />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onNewChat={handleNewChat} />
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh', overflow: 'hidden' }}>
+
+        {/* TopBar */}
+        <div style={{ flexShrink: 0 }}>
+          <TopBar onMenuClick={() => setSidebarOpen(v => !v)} />
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+          {!hasMsgs ? (
+            <WelcomeScreen onSuggestionClick={title => handleSend(`Tell me about: ${title}`)} />
+          ) : (
+            <div style={{
+              maxWidth: '720px', width: '100%', margin: '0 auto',
+              padding: '28px 24px 8px',
+              display: 'flex', flexDirection: 'column', gap: '16px',
+            }}>
+              {messages.map((msg, i) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isLatest={msg.sender === 'ai' && i === messages.length - 1}
+                />
+              ))}
+              {isTyping && <TypingIndicator />}
+              <div ref={messagesEndRef} style={{ height: '1px' }} />
+            </div>
+          )}
+        </div>
+
+        {/* Input bar */}
+        <div style={{
+          flexShrink: 0,
+          padding: '10px 24px 20px',
+          background: '#111116',
+          borderTop: hasMsgs ? '1px solid #1e1e28' : 'none',
+        }}>
+          <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+            {!serviceAvailable && (
+              <ServiceUnavailableBanner onRetry={() => setServiceAvailable(true)} />
+            )}
+            <div style={{ position: 'relative' }}>
+              <ChatInput onSend={handleSend} isLoading={isTyping || !serviceAvailable} />
+              {!serviceAvailable && (
+                <div style={{ position: 'absolute', inset: 0, borderRadius: '12px', cursor: 'not-allowed', zIndex: 5 }} />
+              )}
+            </div>
           </div>
         </div>
-        <button className="rounded-lg bg-[#2a2a2a] text-white/80 hover:bg-[#3a3a3a] ring-1 ring-white/10 px-3.5 py-2 text-sm font-medium transition">
-          Upgrade
-        </button>
-      </header>
-
-      {/* Main Content Area */}
-      <div className="z-10 flex-1 w-full max-w-3xl mx-auto flex flex-col">
-        <AnimatePresence mode="wait">
-          {!conversation ? (
-            // 🧠 Landing Screen - Redesigned to match screenshot
-            <motion.div
-              key="welcome"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.5 }}
-              className="flex-1 flex flex-col items-center justify-center text-center px-4"
-            >
-              {/* Logo */}
-              <div className="mx-auto mb-6 h-16 w-16 rounded-xl bg-[#2a2a2a] grid place-items-center ring-1 ring-white/10">
-                <Bolt size={32} className="text-white/80" />
-              </div>
-
-              {/* Headings */}
-              <p className="text-lg text-white/60">
-                Good to See You!
-              </p>
-              <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white mt-1">
-                How Can I be an Assistance?
-              </h1>
-              <p className="mt-2 text-base text-white/50">
-                I'm available 24/7 for you, ask me anything.
-              </p>
-
-              {/* Info Line */}
-              <div className="flex justify-between items-center w-full max-w-lg mx-auto mt-10 text-xs text-white/40">
-                <span className="flex items-center gap-2">
-                  <Lock size={12} /> Unlock more features with the Pro plan.
-                </span>
-                <span className="flex items-center gap-2 text-green-500">
-                  <Circle size={8} fill="currentColor" /> Active extensions
-                </span>
-              </div>
-
-              {/* Input Field */}
-              <div className="mt-4 relative max-w-lg w-full mx-auto">
-                <div className="relative flex items-center w-full bg-[#1e1e1e] border border-white/10 rounded-xl shadow-lg">
-                  <span className="pl-4 pr-2 text-white/40">
-                    <Plus size={20} />
-                  </span>
-                  <input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                    placeholder="Ask anything..."
-                    className="w-full bg-transparent text-white placeholder-white/50 py-4 pl-1 pr-14 focus:outline-none text-base"
-                    disabled={isLoading}
-                  />
-                  <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition">
-                    <Mic size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Suggested Prompts */}
-              <div className="mt-6 flex flex-wrap justify-center gap-2">
-                {[
-                  { icon: <Lightbulb size={14} />, text: "Any advice for me?" },
-                  { icon: <Video size={14} />, text: "Some youtube video idea" },
-                  { icon: <BookOpen size={14} />, text: "Life lessons from Kratos" },
-                ].map((item, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleChipClick(item.text)}
-                    className="flex items-center gap-2 chip rounded-lg px-3 py-2 text-xs bg-[#2a2a2a] text-white/70 ring-1 ring-white/10 hover:bg-[#3a3a3a] transition"
-                  >
-                    {item.icon}
-                    {item.text}
-                  </button>
-                ))}
-                <button
-                  className="flex items-center justify-center chip h-8 w-8 rounded-lg text-xs bg-[#2a2a2a] text-white/70 ring-1 ring-white/10 hover:bg-[#3a3a3a] transition"
-                >
-                  <MoreHorizontal size={14} />
-                </button>
-              </div>
-            </motion.div>
-          ) : (
-            // 💬 Chat Interface
-            <motion.div
-              key="chat"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="flex-1 flex flex-col overflow-hidden" // Use flex-1 here
-            >
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-2">
-                {messages.map((msg) => (
-                  <MessageBubble
-                    key={msg.id}
-                    sender={msg.sender}
-                    content={msg.content}
-                    timestamp={msg.timestamp}
-                  />
-                ))}
-                {isLoading && (
-                  <div className="flex justify-start">
-                    <div className="h-8 w-8 rounded-full bg-[#2a2a2a] grid place-items-center flex-shrink-0">
-                      <Bolt size={16} className="text-white/70" />
-                    </div>
-                    <div className="max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-2xl bg-[#2a2a2a] text-white/90 rounded-bl-lg ml-2.5">
-                      <motion.div
-                        className="flex gap-1.5"
-                        initial="start"
-                        animate="end"
-                        variants={{
-                          start: {},
-                          end: { transition: { staggerChildren: 0.2 } }
-                        }}
-                      >
-                        <motion.div variants={{ start: { y: 0 }, end: { y: [0, -4, 0] } }} transition={{ repeat: Infinity, duration: 1.0 }} className="h-2 w-2 bg-white/40 rounded-full" />
-                        <motion.div variants={{ start: { y: 0 }, end: { y: [0, -4, 0] } }} transition={{ repeat: Infinity, duration: 1.0, delay: 0.2 }} className="h-2 w-2 bg-white/40 rounded-full" />
-                        <motion.div variants={{ start: { y: 0 }, end: { y: [0, -4, 0] } }} transition={{ repeat: Infinity, duration: 1.0, delay: 0.4 }} className="h-2 w-2 bg-white/40 rounded-full" />
-                      </motion.div>
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Chat Input - sticky at the bottom */}
-              <div className="sticky bottom-4 w-full mt-4">
-                <div className="relative flex items-center w-full bg-[#1e1e1e] border border-white/10 rounded-xl shadow-lg">
-                  <input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                    placeholder="Type your message..."
-                    className="w-full bg-transparent text-white placeholder-white/50 py-4 pl-5 pr-16 focus:outline-none text-base"
-                    disabled={isLoading}
-                  />
-                  <button
-                    onClick={handleSend}
-                    disabled={isLoading}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg bg-white text-black text-sm font-medium hover:bg-white/90 transition disabled:opacity-50"
-                  >
-                    <Send size={18} />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
-      {/* Footer */}
-      <footer className="z-10 text-center py-4 text-xs text-white/40">
-        Unlock new era with MY AI.{" "}
-        <a href="#" className="text-white/70 hover:underline">
-          Sign up
-        </a>
-      </footer>
-    </main>
+      <style>{`
+        @keyframes spin       { to { transform: rotate(360deg); } }
+        @keyframes pulseDot   {
+          0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+          70%  { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+          100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+        }
+      `}</style>
+    </div>
   );
 }

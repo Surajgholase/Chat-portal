@@ -124,9 +124,9 @@ CORS_ALLOW_ALL_ORIGINS = True  # allow React frontend to connect
 # ]
 
 
-# 🤖 OPENAI CONFIG
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# 🤖 GROQ CONFIG
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Optional safety check
-if not OPENAI_API_KEY:
-    print("⚠️  Warning: OPENAI_API_KEY not set in .env file.")
+if not GROQ_API_KEY:
+    print("⚠️  Warning: GROQ_API_KEY not set in .env file.")

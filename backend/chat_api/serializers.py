@@ -15,7 +15,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Conversation
-        fields = ("id", "title", "start_time", "end_time", "status", "ai_summary", "last_message")
+        fields = ("id", "title", "start_time", "end_time", "status", "summary", "last_message")
 
     def get_last_message(self, obj):
         last_msg = obj.messages.last()

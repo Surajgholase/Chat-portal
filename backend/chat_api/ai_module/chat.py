@@ -6,11 +6,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get API Key and Base URL (Groq)
-API_KEY = os.getenv("OPENAI_API_KEY")
-BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.groq.com/openai/v1")
+API_KEY = os.getenv("GROQ_API_KEY")
+BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+MODEL_NAME = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 if not API_KEY:
-    print("⚠️ Warning: OPENAI_API_KEY not set in .env file.")
+    print("⚠️ Warning: GROQ_API_KEY not set in .env file.")
 
 # Initialize the client
 client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
@@ -23,12 +24,13 @@ def chat_reply(conversation, user_message: str) -> str:
     """
     try:
         # Collect conversation history (up to last 10 messages)
+        # Standard OpenAI role format works for Groq
         messages = [{"role": "assistant" if m.sender == "ai" else "user", "content": m.content} for m in conversation.messages.all()[:10]]
         messages.append({"role": "user", "content": user_message})
 
         # Call Groq model
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=MODEL_NAME,
             messages=messages,
             temperature=0.7,
         )
@@ -36,8 +38,10 @@ def chat_reply(conversation, user_message: str) -> str:
         return response.choices[0].message.content.strip()
 
     except Exception as e:
-        print("⚠️ AI Chat Error:", e)
-        return "⚠️ Sorry, the AI service is temporarily unavailable."
+        import traceback
+        print("❌ Groq Chat Error Traceback:")
+        traceback.print_exc()
+        return f"⚠️ Groq Service Error: {str(e)}"
 
 
 # 🧾 Function: Summarize entire conversation
@@ -52,7 +56,7 @@ def summarize_conversation(conversation) -> str:
         )
 
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",  # Groq’s high-quality summarization model
+            model=MODEL_NAME,
             messages=[
                 {
                     "role": "system",
